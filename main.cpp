@@ -1,77 +1,109 @@
 #include <SFML/Graphics.hpp>
+#include <SFML/Graphics/Color.hpp>
 #include <cstdlib>
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 using namespace sf;
 using namespace std;
 
 const float fixedTimeStep = 1.0f / 60.0f;
-int cellc = 100;
 
 class Cell {
 public:
     int x, y;
-    float vx,vy;
-    Cell(int x, int y) : x(x), y(y), vx(), vy(){}
+    float vx, vy;
+    Color color;
+    int group;
+    sf::RectangleShape shape;
 
-    void setPosition(float x, float y) { this->x = x; this->y = y; }
+    Cell(int x, int y, Color color,int group) : x(x), y(y), vx(0), vy(0), color(color), group(group) {
+        shape.setSize(sf::Vector2f(5, 5));
+        shape.setPosition(sf::Vector2f(x, y));
+        shape.setFillColor(color);
+    }
+
+    void setPosition(float x, float y) {
+        this->x = x;
+        this->y = y;
+        shape.setPosition(Vector2f(x, y));
+    }
 };
 
-void rule(Cell** cellarray, int g) {
-    for (int i = 0; i < cellc; i++) {
+void cellinit(int num,Color color, vector<Cell>& all,int group){
+    for (int i = 0;i<num;i++){
+        Cell newCell = Cell((rand() % 700) + 50, (rand() % 700) + 50, color, group);
+        all.push_back(newCell);
+    }
+}
+
+void rule(Cell cell1, Cell cell2, int test1, int test2, int g, float dist,float& F){
+    if(cell1.group == test1 and cell2.group == test2){
+        F = -1.0f / dist * 0.01 * g;
+    }
+}
+
+void gravity(vector<Cell>& cells) {
+    for (size_t i = 0; i < cells.size(); i++) {
         float fx = 0;
         float fy = 0;
-        for (int j = 0; j < cellc; j++) {
+        for (size_t j = 0; j < cells.size(); j++) {
             if (i != j) {
-                int dx = cellarray[i]->x - cellarray[j]->x;
-                int dy = cellarray[i]->y - cellarray[j]->y;
+                int dx = cells[i].x - cells[j].x;
+                int dy = cells[i].y - cells[j].y;
                 float dist = sqrt(dx * dx + dy * dy);
                 if (dist > 0 and dist < 300) {
-                    float F = -1.0f / dist * 0.01;
+                    float F = 0.0f;
+
+                    rule(cells[i],cells[j],1,1,5,dist,F);
+                    rule(cells[i],cells[j],2,2,10,dist,F);
+                    rule(cells[i],cells[j],1,2,-5,dist,F);
+                    rule(cells[i],cells[j],2,1,5,dist,F);
+
                     fx += F * dx;
                     fy += F * dy;
                 }
             }
         }
-        cellarray[i]->vx += fx;
-        cellarray[i]->vy += fy;
+        cells[i].vx += fx;
+        cells[i].vy += fy;
     }
-    for (int i = 0; i < cellc; i++) {
-        if (cellarray[i]->x + cellarray[i]->vx > 780 or cellarray[i]->x + cellarray[i]->vx < 20) {
-            cellarray[i]->x -= cellarray[i]->vx;
-            cellarray[i]->vx *= -0.7;
+    for (size_t i = 0; i < cells.size(); i++) {
+        if (cells[i].x + cells[i].vx > 780 or cells[i].x + cells[i].vx < 20) {
+            cells[i].x -= cells[i].vx;
+            cells[i].vx *= -0.7;
         } else {
-            cellarray[i]->x += cellarray[i]->vx;
+            cells[i].x += cells[i].vx;
         }
-        if (cellarray[i]->y + cellarray[i]->vy > 780 or cellarray[i]->y + cellarray[i]->vy < 20) {
-            cellarray[i]->y -= cellarray[i]->vy;
-            cellarray[i]->vy *= -0.7;
+        if (cells[i].y + cells[i].vy > 780 or cells[i].y + cells[i].vy < 20) {
+            cells[i].y -= cells[i].vy;
+            cells[i].vy *= -0.7;
         } else {
-            cellarray[i]->y += cellarray[i]->vy;
+            cells[i].y += cells[i].vy;
         }
+        cells[i].setPosition(cells[i].x,cells[i].y);
     }
 }
 
-int main() {
+int main()
+{
     srand(time(NULL));
-    RenderWindow window(VideoMode(800, 800), "Life game");
-    window.setPosition(Vector2i(0,0));
+    RenderWindow window(VideoMode(800, 800), "Game");
+    window.setPosition(Vector2i(0, 0));
 
-    Cell** cellarray;
-    cellarray = new Cell * [cellc];
-    for (int i = 0; i < cellc; i++) {
-        cellarray[i] = new Cell(rand() % 701 + 50, rand() % 701 + 50);
-    }
+    vector<Cell> cells;
+    cellinit(40,Color::Yellow,cells,1);
+    cellinit(20,Color::Red,cells,2);
 
-    // Timer for fixed time step
     Clock clock;
     float accumulator = 0.0f;
 
-    // EXIT HANDLING
-    while (window.isOpen()) {
+    while (window.isOpen())
+    {
         Event event;
-        while (window.pollEvent(event)) {
+        while (window.pollEvent(event))
+        {
             if (event.type == Event::Closed)
                 window.close();
         }
@@ -81,28 +113,18 @@ int main() {
         accumulator += dt;
 
         // Update game logic at fixed time step
-        while (accumulator >= fixedTimeStep) {
-            rule(cellarray,5);
+        while (accumulator >= fixedTimeStep)
+        {
+            gravity(cells);
             accumulator -= fixedTimeStep;
-       }
+        }
 
-        // DRAW CELLS
         window.clear();
-        Vector2i windowPosition = window.getPosition();
-        for (int i = 0; i < cellc; i++) {
-            RectangleShape rect(Vector2f(5, 5));
-            rect.setPosition(cellarray[i]->x - windowPosition.x, cellarray[i]->y - windowPosition.y);
-            rect.setFillColor(Color::Yellow);
-            window.draw(rect);
+        for (const auto& cell : cells)
+        {
+            window.draw(cell.shape);
         }
         window.display();
     }
-
-    // Deallocate memory
-    for (int i = 0; i < cellc; i++) {
-        delete cellarray[i];
-    }
-    delete[] cellarray;
-
     return 0;
 }
